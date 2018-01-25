@@ -481,9 +481,17 @@ class VerilogEmitter extends SeqTransform with Emitter {
          Seq(nx, "[", bitWidth(t) - 1, ":0]")
       }
 
+      // Declares an intermediate wire to hold a large enough random number.
+      // Then, return the correct number of bits selected from the random value
+      def zero_string(t: Type) : Seq[Any] = {
+         Seq(bitWidth(t), "'b0")
+      }
+
       def initialize(e: Expression) = {
         initials += Seq("`ifdef RANDOMIZE_REG_INIT")
         initials += Seq(e, " = ", rand_string(e.tpe), ";")
+        initials += Seq("`else // !RANDOMIZE_REG_INIT")
+        initials += Seq(e, " = ", zero_string(e.tpe), ";")
         initials += Seq("`endif // RANDOMIZE_REG_INIT")
       }
 
