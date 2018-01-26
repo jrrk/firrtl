@@ -394,17 +394,9 @@ class VerilogEmitter extends SeqTransform with Emitter {
 
       // In simulation, assign garbage under a predicate
       def garbageAssign(e: Expression, syn: Expression, garbageCond: Expression, info: Info) = {
-        assigns += Seq("`ifndef RANDOMIZE_GARBAGE_ASSIGN")
         assigns += Seq("assign ", e, " = ", syn, ";", info)
-        assigns += Seq("`else")
-        assigns += Seq("assign ", e, " = ", garbageCond, " ? ", rand_string(syn.tpe), " : ", syn,
-                       ";", info)
-        assigns += Seq("`endif // RANDOMIZE_GARBAGE_ASSIGN")
       }
       def invalidAssign(e: Expression) = {
-        assigns += Seq("`ifdef RANDOMIZE_INVALID_ASSIGN")
-        assigns += Seq("assign ", e, " = ", rand_string(e.tpe), ";")
-        assigns += Seq("`endif // RANDOMIZE_INVALID_ASSIGN")
       }
       def update_and_reset(r: Expression, clk: Expression, reset: Expression, init: Expression) = {
         // We want to flatten Mux trees for reg updates into if-trees for
@@ -488,21 +480,14 @@ class VerilogEmitter extends SeqTransform with Emitter {
       }
 
       def initialize(e: Expression) = {
-        initials += Seq("`ifdef RANDOMIZE_REG_INIT")
-        initials += Seq(e, " = ", rand_string(e.tpe), ";")
-        initials += Seq("`else // !RANDOMIZE_REG_INIT")
         initials += Seq(e, " = ", zero_string(e.tpe), ";")
-        initials += Seq("`endif // RANDOMIZE_REG_INIT")
       }
 
       def initialize_mem(s: DefMemory) {
         val index = wref("initvar", s.dataType)
-        val rstring = rand_string(s.dataType)
-        initials += Seq("`ifdef RANDOMIZE_MEM_INIT")
         initials += Seq("for (initvar = 0; initvar < ", s.depth, "; initvar = initvar+1)")
         initials += Seq(tab, WSubAccess(wref(s.name, s.dataType), index, s.dataType, FEMALE),
-                             " = ", rstring,";")
-        initials += Seq("`endif // RANDOMIZE_MEM_INIT")
+                             " = ", zero_string(s.dataType), ";")
       }
 
       def simulate(clk: Expression, en: Expression, s: Seq[Any], cond: Option[String], info: Info) = {
@@ -702,7 +687,7 @@ class VerilogEmitter extends SeqTransform with Emitter {
           emit(Seq("`endif"))
         }
         if (initials.nonEmpty) {
-          emit(Seq("`ifdef RANDOMIZE"))
+          emit(Seq("`ifndef SYNTHESIS"))
           emit(Seq("  integer initvar;"))
           emit(Seq("  initial begin"))
           // This enables test benches to set the random values at time 0.001,
@@ -713,7 +698,7 @@ class VerilogEmitter extends SeqTransform with Emitter {
           emit(Seq("    `endif"))
           for (x <- initials) emit(Seq(tab, x))
           emit(Seq("  end"))
-          emit(Seq("`endif // RANDOMIZE"))
+          emit(Seq("`endif // SYNTHESIS"))
         }
 
         for (clk_stream <- at_clock if clk_stream._2.nonEmpty) {
@@ -733,19 +718,7 @@ class VerilogEmitter extends SeqTransform with Emitter {
 
   /** Preamble for every emitted Verilog file */
   def preamble: String =
-    """|`ifdef RANDOMIZE_GARBAGE_ASSIGN
-       |`define RANDOMIZE
-       |`endif
-       |`ifdef RANDOMIZE_INVALID_ASSIGN
-       |`define RANDOMIZE
-       |`endif
-       |`ifdef RANDOMIZE_REG_INIT
-       |`define RANDOMIZE
-       |`endif
-       |`ifdef RANDOMIZE_MEM_INIT
-       |`define RANDOMIZE
-       |`endif
-       |
+    """|
        |""".stripMargin
 
   def transforms = Seq(
